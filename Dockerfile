@@ -1,3 +1,5 @@
+ARG PG_VERSION=17
+
 FROM golang:1.25.1-alpine AS builder
 
 WORKDIR /build
@@ -9,7 +11,6 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o postgres-migrator ./cmd/postgres-migrator
 
-ARG PG_VERSION=17
 FROM postgres:${PG_VERSION}-alpine
 
 WORKDIR /app
