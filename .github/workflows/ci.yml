@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Go CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Go mod download
+        run: go mod download
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Pre-pull DB images for integration tests
+        run: |
+          docker pull postgres:16-alpine
+          docker pull postgres:15-alpine
+
+      - name: Run integration tests
+        run: go test ./tests/... -v -count=1 -timeout 15m
