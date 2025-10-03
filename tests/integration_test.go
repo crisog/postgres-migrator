@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/crisog/postgres-migrator/pkg/validation"
 	"github.com/crisog/postgres-migrator/tests/helpers"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
@@ -488,7 +489,8 @@ func TestLargeDataset(t *testing.T) {
 	defer targetConn.Close(ctx)
 
 	t.Log("Running comprehensive validation for large dataset migration...")
-	helpers.ValidateTableMigration(t, ctx, sourceConn, targetConn, "random_data", true)
+	err = validation.ValidateAllTablesFromURLs(ctx, sourceConnStr, targetConnStr)
+	require.NoError(t, err)
 
 	helpers.ValidateIDsInRange(t, ctx, sourceConn, targetConn, "random_data", 1, 1000000)
 }

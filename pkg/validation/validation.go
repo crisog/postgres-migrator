@@ -45,6 +45,79 @@ func ValidateDataChecksum(ctx context.Context, sourceConn, targetConn *pgx.Conn,
 	return validateDataChecksum(ctx, sourceConn, targetConn, tableName)
 }
 
+func ValidateTableMigrationFromURLs(ctx context.Context, sourceURL, targetURL, tableName string, validateChecksum bool) error {
+	sourceConn, err := pgx.Connect(ctx, sourceURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to source database: %w", err)
+	}
+	defer sourceConn.Close(ctx)
+
+	targetConn, err := pgx.Connect(ctx, targetURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to target database: %w", err)
+	}
+	defer targetConn.Close(ctx)
+
+	return ValidateTableMigration(ctx, sourceConn, targetConn, tableName, validateChecksum)
+}
+
+func ValidateAllTablesFromURLs(ctx context.Context, sourceURL, targetURL string) error {
+	sourceConn, err := pgx.Connect(ctx, sourceURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to source database: %w", err)
+	}
+	defer sourceConn.Close(ctx)
+
+	targetConn, err := pgx.Connect(ctx, targetURL)
+	if err != nil {
+		return fmt.Errorf("failed to connect to target database: %w", err)
+	}
+	defer targetConn.Close(ctx)
+
+	// Get all tables from target database
+	query := `
+		SELECT tablename
+		FROM pg_tables
+		WHERE schemaname = 'public'
+		ORDER BY tablename`
+
+	rows, err := targetConn.Query(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to query tables: %w", err)
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return fmt.Errorf("failed to scan table name: %w", err)
+		}
+		tables = append(tables, tableName)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating tables: %w", err)
+	}
+
+	if len(tables) == 0 {
+		log.Println("No tables found to validate")
+		return nil
+	}
+
+	log.Printf("Found %d tables to validate\n", len(tables))
+
+	// Validate each table (without checksum for speed)
+	for _, tableName := range tables {
+		log.Printf("\n=== Validating table: %s ===", tableName)
+		if err := ValidateTableMigration(ctx, sourceConn, targetConn, tableName, false); err != nil {
+			return fmt.Errorf("validation failed for table %s: %w", tableName, err)
+		}
+	}
+
+	log.Printf("\n✓ All %d tables validated successfully", len(tables))
+	return nil
+}
+
 func ValidateTableMigration(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, validateChecksum bool) error {
 	log.Println("Validating schema columns...")
 	if err := validateSchemaColumns(ctx, sourceConn, targetConn, tableName); err != nil {

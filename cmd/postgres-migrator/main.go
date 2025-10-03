@@ -10,6 +10,7 @@ import (
 
 	"github.com/crisog/postgres-migrator/internal/config"
 	"github.com/crisog/postgres-migrator/pkg/migration"
+	"github.com/crisog/postgres-migrator/pkg/validation"
 )
 
 func main() {
@@ -39,6 +40,14 @@ func run() int {
 	if err := migration.Run(ctx, cfg, logger); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
+	}
+
+	if cfg.ValidateAfter {
+		logger.Println("\nRunning post-migration validation...")
+		if err := validation.ValidateAllTablesFromURLs(ctx, cfg.SourceDatabaseURL, cfg.TargetDatabaseURL); err != nil {
+			fmt.Fprintf(os.Stderr, "Validation failed: %v\n", err)
+			return 1
+		}
 	}
 
 	return 0
