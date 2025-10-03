@@ -261,3 +261,17 @@ func ValidateTableMigration(t *testing.T, ctx context.Context, sourceConn, targe
 
 	t.Logf("✓ All validations passed for table '%s'", tableName)
 }
+
+func ValidateBasicMigration(t *testing.T, ctx context.Context, targetConn *pgx.Conn) {
+	t.Helper()
+
+	var userCount int
+	err := targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
+	require.NoError(t, err)
+	require.Equal(t, 3, userCount)
+
+	var postCount int
+	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM posts").Scan(&postCount)
+	require.NoError(t, err)
+	require.Equal(t, 4, postCount)
+}

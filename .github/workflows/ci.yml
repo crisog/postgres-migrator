@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Go CI
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -25,10 +25,43 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-      - name: Pre-pull DB images for integration tests
-        run: |
-          docker pull postgres:16-alpine
-          docker pull postgres:15-alpine
+  test:
+    name: Test (PostgreSQL ${{ matrix.pg-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg-version: [15, 16, 17]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Run integration tests
-        run: go test ./tests/... -v -count=1 -timeout 15m
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Install PostgreSQL ${{ matrix.pg-version }} client
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-${{ matrix.pg-version }}
+          sudo update-alternatives --install /usr/bin/pg_dump pg_dump /usr/lib/postgresql/${{ matrix.pg-version }}/bin/pg_dump 200
+          sudo update-alternatives --install /usr/bin/pg_restore pg_restore /usr/lib/postgresql/${{ matrix.pg-version }}/bin/pg_restore 200
+          sudo update-alternatives --set pg_dump /usr/lib/postgresql/${{ matrix.pg-version }}/bin/pg_dump
+          sudo update-alternatives --set pg_restore /usr/lib/postgresql/${{ matrix.pg-version }}/bin/pg_restore
+          pg_dump --version
+          pg_restore --version
+
+      - name: Go mod download
+        run: go mod download
+
+      - name: Pre-pull DB images for integration tests
+        run: docker pull postgres:${{ matrix.pg-version }}-alpine
+
+      - name: Run same-version migration tests
+        run: go test ./tests/... -v -count=1 -timeout 15m -run TestSameVersionMigration${{ matrix.pg-version }}
+
+      - name: Run all other tests (PostgreSQL 16 only)
+        if: matrix.pg-version == 16
+        run: go test ./tests/... -v -count=1 -timeout 15m -skip TestSameVersionMigration

@@ -58,15 +58,7 @@ func TestMigration(t *testing.T) {
 	require.NoError(t, err)
 	defer targetConn.Close(ctx)
 
-	var userCount int
-	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
-	require.NoError(t, err)
-	require.Equal(t, 3, userCount)
-
-	var postCount int
-	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM posts").Scan(&postCount)
-	require.NoError(t, err)
-	require.Equal(t, 4, postCount)
+	helpers.ValidateBasicMigration(t, ctx, targetConn)
 
 	var name, email string
 	err = targetConn.QueryRow(ctx, "SELECT name, email FROM users WHERE id = 1").Scan(&name, &email)
@@ -173,15 +165,7 @@ func TestParallelJobs(t *testing.T) {
 	require.NoError(t, err)
 	defer targetConn.Close(ctx)
 
-	var userCount int
-	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
-	require.NoError(t, err)
-	require.Equal(t, 3, userCount)
-
-	var postCount int
-	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM posts").Scan(&postCount)
-	require.NoError(t, err)
-	require.Equal(t, 4, postCount)
+	helpers.ValidateBasicMigration(t, ctx, targetConn)
 }
 
 func TestNonCleanTarget(t *testing.T) {
@@ -491,4 +475,151 @@ func TestLargeDataset(t *testing.T) {
 	helpers.ValidateTableMigration(t, ctx, sourceConn, targetConn, "random_data", true)
 
 	helpers.ValidateIDsInRange(t, ctx, sourceConn, targetConn, "random_data", 1, 1000000)
+}
+
+func TestSameVersionMigration15(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	sourceContainer, err := postgres.Run(
+		ctx,
+		"postgres:15-alpine",
+		postgres.WithDatabase("sourcedb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		postgres.WithInitScripts("testdata/init-source.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, sourceContainer)
+	require.NoError(t, err)
+
+	targetContainer, err := postgres.Run(
+		ctx,
+		"postgres:15-alpine",
+		postgres.WithDatabase("targetdb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, targetContainer)
+	require.NoError(t, err)
+
+	sourceConnStr, err := sourceContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	targetConnStr, err := targetContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	helpers.RunMigration(t, ctx, sourceConnStr, targetConnStr, 1, true, true)
+
+	targetConn, err := pgx.Connect(ctx, targetConnStr)
+	require.NoError(t, err)
+	defer targetConn.Close(ctx)
+
+	helpers.ValidateBasicMigration(t, ctx, targetConn)
+}
+
+func TestSameVersionMigration16(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	sourceContainer, err := postgres.Run(
+		ctx,
+		"postgres:16-alpine",
+		postgres.WithDatabase("sourcedb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		postgres.WithInitScripts("testdata/init-source.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, sourceContainer)
+	require.NoError(t, err)
+
+	targetContainer, err := postgres.Run(
+		ctx,
+		"postgres:16-alpine",
+		postgres.WithDatabase("targetdb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, targetContainer)
+	require.NoError(t, err)
+
+	sourceConnStr, err := sourceContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	targetConnStr, err := targetContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	helpers.RunMigration(t, ctx, sourceConnStr, targetConnStr, 1, true, true)
+
+	targetConn, err := pgx.Connect(ctx, targetConnStr)
+	require.NoError(t, err)
+	defer targetConn.Close(ctx)
+
+	helpers.ValidateBasicMigration(t, ctx, targetConn)
+}
+
+func TestSameVersionMigration17(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	sourceContainer, err := postgres.Run(
+		ctx,
+		"postgres:17-alpine",
+		postgres.WithDatabase("sourcedb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		postgres.WithInitScripts("testdata/init-source.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, sourceContainer)
+	require.NoError(t, err)
+
+	targetContainer, err := postgres.Run(
+		ctx,
+		"postgres:17-alpine",
+		postgres.WithDatabase("targetdb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, targetContainer)
+	require.NoError(t, err)
+
+	sourceConnStr, err := sourceContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	targetConnStr, err := targetContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	helpers.RunMigration(t, ctx, sourceConnStr, targetConnStr, 1, true, true)
+
+	targetConn, err := pgx.Connect(ctx, targetConnStr)
+	require.NoError(t, err)
+	defer targetConn.Close(ctx)
+
+	helpers.ValidateBasicMigration(t, ctx, targetConn)
 }
