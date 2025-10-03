@@ -11,6 +11,8 @@ import (
 )
 
 func main() {
+	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+
 	sourceURL := flag.String("source", "", "Source database connection URL")
 	targetURL := flag.String("target", "", "Target database connection URL")
 	tableName := flag.String("table", "", "Optional: specific table name to validate (validates all tables if not specified)")
@@ -26,15 +28,15 @@ func main() {
 	ctx := context.Background()
 
 	if *tableName != "" {
-		log.Printf("Starting validation for table '%s'...\n", *tableName)
-		if err := validation.ValidateTableMigrationFromURLs(ctx, *sourceURL, *targetURL, *tableName, *validateChecksum); err != nil {
-			log.Fatalf("❌ Validation failed: %v", err)
+		logger.Printf("Starting validation for table '%s'...\n", *tableName)
+		if err := validation.ValidateTableMigrationFromURLs(ctx, *sourceURL, *targetURL, *tableName, *validateChecksum, logger); err != nil {
+			logger.Fatalf("❌ Validation failed: %v", err)
 		}
-		log.Printf("\n✓ All validations passed for table '%s'\n", *tableName)
+		logger.Printf("\n✓ All validations passed for table '%s'\n", *tableName)
 	} else {
-		log.Println("Starting validation for all tables...")
-		if err := validation.ValidateAllTablesFromURLs(ctx, *sourceURL, *targetURL); err != nil {
-			log.Fatalf("❌ Validation failed: %v", err)
+		logger.Println("Starting validation for all tables...")
+		if err := validation.ValidateAllTablesFromURLs(ctx, *sourceURL, *targetURL, logger); err != nil {
+			logger.Fatalf("❌ Validation failed: %v", err)
 		}
 	}
 }

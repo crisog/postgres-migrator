@@ -45,7 +45,7 @@ func ValidateDataChecksum(ctx context.Context, sourceConn, targetConn *pgx.Conn,
 	return validateDataChecksum(ctx, sourceConn, targetConn, tableName)
 }
 
-func ValidateTableMigrationFromURLs(ctx context.Context, sourceURL, targetURL, tableName string, validateChecksum bool) error {
+func ValidateTableMigrationFromURLs(ctx context.Context, sourceURL, targetURL, tableName string, validateChecksum bool, logger *log.Logger) error {
 	sourceConn, err := pgx.Connect(ctx, sourceURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to source database: %w", err)
@@ -58,10 +58,10 @@ func ValidateTableMigrationFromURLs(ctx context.Context, sourceURL, targetURL, t
 	}
 	defer targetConn.Close(ctx)
 
-	return ValidateTableMigration(ctx, sourceConn, targetConn, tableName, validateChecksum)
+	return ValidateTableMigration(ctx, sourceConn, targetConn, tableName, validateChecksum, logger)
 }
 
-func ValidateAllTablesFromURLs(ctx context.Context, sourceURL, targetURL string) error {
+func ValidateAllTablesFromURLs(ctx context.Context, sourceURL, targetURL string, logger *log.Logger) error {
 	sourceConn, err := pgx.Connect(ctx, sourceURL)
 	if err != nil {
 		return fmt.Errorf("failed to connect to source database: %w", err)
@@ -100,68 +100,68 @@ func ValidateAllTablesFromURLs(ctx context.Context, sourceURL, targetURL string)
 	}
 
 	if len(tables) == 0 {
-		log.Println("No tables found to validate")
+		logger.Println("No tables found to validate")
 		return nil
 	}
 
-	log.Printf("Found %d tables to validate\n", len(tables))
+	logger.Printf("Found %d tables to validate\n", len(tables))
 
 	// Validate each table (without checksum for speed)
 	for _, tableName := range tables {
-		log.Printf("\n=== Validating table: %s ===", tableName)
-		if err := ValidateTableMigration(ctx, sourceConn, targetConn, tableName, false); err != nil {
+		logger.Printf("\n=== Validating table: %s ===", tableName)
+		if err := ValidateTableMigration(ctx, sourceConn, targetConn, tableName, false, logger); err != nil {
 			return fmt.Errorf("validation failed for table %s: %w", tableName, err)
 		}
 	}
 
-	log.Printf("\n✓ All %d tables validated successfully", len(tables))
+	logger.Printf("\n✓ All %d tables validated successfully", len(tables))
 	return nil
 }
 
-func ValidateTableMigration(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, validateChecksum bool) error {
-	log.Println("Validating schema columns...")
+func ValidateTableMigration(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, validateChecksum bool, logger *log.Logger) error {
+	logger.Println("Validating schema columns...")
 	if err := validateSchemaColumns(ctx, sourceConn, targetConn, tableName); err != nil {
 		return fmt.Errorf("schema columns validation failed: %w", err)
 	}
-	log.Println("✓ Schema columns match")
+	logger.Println("✓ Schema columns match")
 
-	log.Println("Validating schema constraints...")
+	logger.Println("Validating schema constraints...")
 	if err := validateSchemaConstraints(ctx, sourceConn, targetConn, tableName); err != nil {
 		return fmt.Errorf("schema constraints validation failed: %w", err)
 	}
-	log.Println("✓ Schema constraints match")
+	logger.Println("✓ Schema constraints match")
 
-	log.Println("Validating row count...")
+	logger.Println("Validating row count...")
 	sourceCount, err := validateRowCount(ctx, sourceConn, targetConn, tableName)
 	if err != nil {
 		return fmt.Errorf("row count validation failed: %w", err)
 	}
-	log.Printf("✓ Row count matches: %d records", sourceCount)
+	logger.Printf("✓ Row count matches: %d records", sourceCount)
 
-	log.Println("Validating ID range...")
+	logger.Println("Validating ID range...")
 	if err := validateIDRange(ctx, sourceConn, targetConn, tableName); err != nil {
 		return fmt.Errorf("ID range validation failed: %w", err)
 	}
-	log.Println("✓ ID range matches")
+	logger.Println("✓ ID range matches")
 
-	log.Println("Validating aggregate statistics...")
+	logger.Println("Validating aggregate statistics...")
 	if err := validateAggregateStats(ctx, sourceConn, targetConn, tableName); err != nil {
 		return fmt.Errorf("aggregate statistics validation failed: %w", err)
 	}
-	log.Println("✓ Aggregate statistics match")
+	logger.Println("✓ Aggregate statistics match")
 
-	log.Println("Validating timestamp range...")
+	logger.Println("Validating timestamp range...")
 	if err := validateTimestampRange(ctx, sourceConn, targetConn, tableName); err != nil {
 		return fmt.Errorf("timestamp range validation failed: %w", err)
 	}
-	log.Println("✓ Timestamp range matches")
+	logger.Println("✓ Timestamp range matches")
 
 	if validateChecksum {
-		log.Println("Validating data checksum (this may take a while on large datasets)...")
+		logger.Println("Validating data checksum (this may take a while on large datasets)...")
 		if err := validateDataChecksum(ctx, sourceConn, targetConn, tableName); err != nil {
 			return fmt.Errorf("data checksum validation failed: %w", err)
 		}
-		log.Println("✓ Data checksum matches")
+		logger.Println("✓ Data checksum matches")
 	}
 
 	return nil

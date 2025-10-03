@@ -4,6 +4,10 @@ PostgreSQL database migration tool using native `pg_dump` and `pg_restore`.
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/postgres-migrator?referralCode=crisog)
 
+<p align="center">
+  <img src="template.jpeg" alt="Deploy Template">
+</p>
+
 ## Installation
 
 ```bash

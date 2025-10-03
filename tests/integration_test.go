@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"testing"
 
@@ -489,7 +490,8 @@ func TestLargeDataset(t *testing.T) {
 	defer targetConn.Close(ctx)
 
 	t.Log("Running comprehensive validation for large dataset migration...")
-	err = validation.ValidateAllTablesFromURLs(ctx, sourceConnStr, targetConnStr)
+	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
+	err = validation.ValidateAllTablesFromURLs(ctx, sourceConnStr, targetConnStr, logger)
 	require.NoError(t, err)
 
 	helpers.ValidateIDsInRange(t, ctx, sourceConn, targetConn, "random_data", 1, 1000000)
