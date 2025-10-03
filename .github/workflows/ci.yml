@@ -62,12 +62,7 @@ jobs:
           docker pull postgres:16-alpine
           docker pull postgres:17-alpine
 
-      - name: Run same-version migration test
-        run: go test ./tests/... -v -count=1 -timeout 15m -run TestSameVersionMigration${{ matrix.pg-version }}
-        env:
-          POSTGRES_VERSION: ${{ matrix.pg-version }}
-
-      - name: Run all other tests
-        run: go test ./tests/... -v -count=1 -timeout 15m -skip TestSameVersionMigration
+      - name: Run all tests
+        run: go test ./tests/... -v -count=1 -timeout 15m
         env:
           POSTGRES_VERSION: ${{ matrix.pg-version }}
