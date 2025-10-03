@@ -46,7 +46,7 @@ All configuration is done via environment variables:
 | `PARALLEL_JOBS` | No | `1` | Number of parallel jobs for restore (recommended: number of CPU cores) |
 | `NO_OWNER` | No | `true` | Skip ownership preservation (`false` to preserve owners) |
 | `NO_ACL` | No | `true` | Skip ACL/permissions (`false` to preserve permissions) |
-| `VALIDATE_AFTER` | No | `false` | Run validation on all tables after migration completes |
+| `VALIDATE_AFTER` | No | `true` | Run validation on all tables after migration completes (set to `false` to skip) |
 
 ### With Validation
 

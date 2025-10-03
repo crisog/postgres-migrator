@@ -22,7 +22,7 @@ func LoadFromEnv() (*Config, error) {
 		ParallelJobs:      getEnvAsIntOrDefault("PARALLEL_JOBS", 1),
 		NoOwner:           os.Getenv("NO_OWNER") != "false",
 		NoACL:             os.Getenv("NO_ACL") != "false",
-		ValidateAfter:     os.Getenv("VALIDATE_AFTER") == "true",
+		ValidateAfter:     os.Getenv("VALIDATE_AFTER") != "false",
 	}
 
 	if err := cfg.Validate(); err != nil {
