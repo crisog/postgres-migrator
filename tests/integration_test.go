@@ -2,6 +2,8 @@ package tests
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/crisog/postgres-migrator/tests/helpers"
@@ -12,6 +14,20 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+func getPostgresImage(version string) string {
+	if version == "" {
+		version = "16"
+	}
+	return fmt.Sprintf("postgres:%s-alpine", version)
+}
+
+func getDefaultPostgresVersion() string {
+	if v := os.Getenv("POSTGRES_VERSION"); v != "" {
+		return v
+	}
+	return "16"
+}
+
 func TestMigration(t *testing.T) {
 	t.Parallel()
 
@@ -19,7 +35,7 @@ func TestMigration(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -34,7 +50,7 @@ func TestMigration(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -84,7 +100,7 @@ func TestVersionMismatch(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:15-alpine",
+		getPostgresImage("15"),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -98,7 +114,7 @@ func TestVersionMismatch(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage("16"),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -126,7 +142,7 @@ func TestParallelJobs(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -141,7 +157,7 @@ func TestParallelJobs(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -175,7 +191,7 @@ func TestNonCleanTarget(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -190,7 +206,7 @@ func TestNonCleanTarget(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -219,7 +235,7 @@ func TestNoOwner(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("sourceuser"),
 		postgres.WithPassword("password"),
@@ -234,7 +250,7 @@ func TestNoOwner(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("targetuser"),
 		postgres.WithPassword("password"),
@@ -271,7 +287,7 @@ func TestNoOwnerDisabled(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("sourceuser"),
 		postgres.WithPassword("password"),
@@ -286,7 +302,7 @@ func TestNoOwnerDisabled(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("targetuser"),
 		postgres.WithPassword("password"),
@@ -314,7 +330,7 @@ func TestNoACL(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -329,7 +345,7 @@ func TestNoACL(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -371,7 +387,7 @@ func TestNoACLDisabled(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -386,7 +402,7 @@ func TestNoACLDisabled(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -423,7 +439,7 @@ func TestLargeDataset(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -438,7 +454,7 @@ func TestLargeDataset(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -484,7 +500,7 @@ func TestSameVersionMigration15(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:15-alpine",
+		getPostgresImage("15"),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -499,7 +515,7 @@ func TestSameVersionMigration15(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:15-alpine",
+		getPostgresImage("15"),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -533,7 +549,7 @@ func TestSameVersionMigration16(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -548,7 +564,7 @@ func TestSameVersionMigration16(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:16-alpine",
+		getPostgresImage(getDefaultPostgresVersion()),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -582,7 +598,7 @@ func TestSameVersionMigration17(t *testing.T) {
 
 	sourceContainer, err := postgres.Run(
 		ctx,
-		"postgres:17-alpine",
+		getPostgresImage("17"),
 		postgres.WithDatabase("sourcedb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),
@@ -597,7 +613,7 @@ func TestSameVersionMigration17(t *testing.T) {
 
 	targetContainer, err := postgres.Run(
 		ctx,
-		"postgres:17-alpine",
+		getPostgresImage("17"),
 		postgres.WithDatabase("targetdb"),
 		postgres.WithUsername("user"),
 		postgres.WithPassword("password"),

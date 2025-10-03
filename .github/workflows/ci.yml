@@ -57,11 +57,17 @@ jobs:
         run: go mod download
 
       - name: Pre-pull DB images for integration tests
-        run: docker pull postgres:${{ matrix.pg-version }}-alpine
+        run: |
+          docker pull postgres:15-alpine
+          docker pull postgres:16-alpine
+          docker pull postgres:17-alpine
 
-      - name: Run same-version migration tests
+      - name: Run same-version migration test
         run: go test ./tests/... -v -count=1 -timeout 15m -run TestSameVersionMigration${{ matrix.pg-version }}
+        env:
+          POSTGRES_VERSION: ${{ matrix.pg-version }}
 
-      - name: Run all other tests (PostgreSQL 16 only)
-        if: matrix.pg-version == 16
+      - name: Run all other tests
         run: go test ./tests/... -v -count=1 -timeout 15m -skip TestSameVersionMigration
+        env:
+          POSTGRES_VERSION: ${{ matrix.pg-version }}
