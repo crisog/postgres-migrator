@@ -487,17 +487,8 @@ func TestLargeDataset(t *testing.T) {
 	require.NoError(t, err)
 	defer targetConn.Close(ctx)
 
-	var targetCount int
-	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM random_data").Scan(&targetCount)
-	require.NoError(t, err)
-	require.Equal(t, sourceCount, targetCount, "Target should have same number of records as source")
+	t.Log("Running comprehensive validation for large dataset migration...")
+	helpers.ValidateTableMigration(t, ctx, sourceConn, targetConn, "random_data", true)
 
-	var name, email string
-	var age int
-	err = targetConn.QueryRow(ctx, "SELECT name, email, age FROM random_data WHERE id = 12345").Scan(&name, &email, &age)
-	require.NoError(t, err)
-	require.Equal(t, "User_12345", name)
-	require.Equal(t, "user12345@example.com", email)
-	require.GreaterOrEqual(t, age, 18)
-	require.LessOrEqual(t, age, 78)
+	helpers.ValidateIDsInRange(t, ctx, sourceConn, targetConn, "random_data", 1, 1000000)
 }
