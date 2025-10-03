@@ -9,10 +9,8 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o postgres-migrator ./cmd/postgres-migrator
 
-FROM alpine:3.19
-
-ARG PG_VERSION=16
-RUN apk add --no-cache postgresql${PG_VERSION}-client
+ARG PG_VERSION=17
+FROM postgres:${PG_VERSION}-alpine
 
 WORKDIR /app
 

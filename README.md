@@ -46,6 +46,24 @@ All configuration is done via environment variables:
 | `PARALLEL_JOBS` | No | `1` | Number of parallel jobs for restore (recommended: number of CPU cores) |
 | `NO_OWNER` | No | `true` | Skip ownership preservation (`false` to preserve owners) |
 | `NO_ACL` | No | `true` | Skip ACL/permissions (`false` to preserve permissions) |
+| `VALIDATE_AFTER` | No | `false` | Run validation on all tables after migration completes |
+
+### With Validation
+
+```bash
+export SOURCE_DATABASE_URL="postgres://user:password@source-host:5432/sourcedb"
+export TARGET_DATABASE_URL="postgres://user:password@target-host:5432/targetdb"
+export VALIDATE_AFTER=true
+
+postgres-migrator
+```
+
+This will automatically validate all migrated tables after the migration completes, checking:
+- Schema columns and constraints match
+- Row counts are identical
+- ID ranges are correct
+- Aggregate statistics match
+- Timestamp ranges are preserved
 
 ## Connection String Format
 
@@ -62,6 +80,33 @@ postgresql://username:password@hostname:port/database?sslmode=require
 host=hostname port=5432 user=username password=password dbname=database sslmode=disable
 ```
 
+## Migration Validator
+
+Standalone tool for validating database migrations:
+
+```bash
+# Validate all tables
+migration-validator \
+  -source "postgres://user:pass@source-host:5432/sourcedb" \
+  -target "postgres://user:pass@target-host:5432/targetdb"
+
+# Validate a specific table with checksum (slower but thorough)
+migration-validator \
+  -source "postgres://user:pass@source-host:5432/sourcedb" \
+  -target "postgres://user:pass@target-host:5432/targetdb" \
+  -table users \
+  -checksum
+```
+
+The validator checks:
+- Schema columns and data types
+- Constraints (primary keys, foreign keys, unique)
+- Row counts
+- ID ranges and uniqueness
+- Aggregate statistics (sums, distinct counts)
+- Timestamp ranges
+- Data checksums (optional, slower)
+
 ## How It Works
 
 1. **Validation** - Checks both database connections and verifies version compatibility
@@ -69,6 +114,7 @@ host=hostname port=5432 user=username password=password dbname=database sslmode=
 3. **Dump** - Creates a compressed custom-format dump of the source database
 4. **Restore** - Restores the dump to the target database (optionally in parallel)
 5. **Cleanup** - Removes temporary dump file
+6. **Post-migration validation** (optional) - Validates all tables were migrated correctly
 
 ## Error Handling
 
