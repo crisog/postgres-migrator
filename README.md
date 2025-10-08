@@ -48,8 +48,8 @@ All configuration is done via environment variables:
 | `SOURCE_DATABASE_URL` | Yes | - | Source database connection string |
 | `TARGET_DATABASE_URL` | Yes | - | Target database connection string |
 | `PARALLEL_JOBS` | No | `1` | Number of parallel jobs for restore (recommended: number of CPU cores) |
-| `NO_OWNER` | No | `false` | Skip ownership preservation |
-| `NO_ACL` | No | `false` | Skip ACL/permissions |
+| `NO_OWNER` | No | `false` | When `true`, skips restoration of object ownership (e.g., who owns tables/schemas). This omits ALTER OWNER commands in the dump file |
+| `NO_ACL` | No | `false` | When `true`, skips restoration of access privileges (ACLs), such as GRANT/REVOKE commands for permissions on objects. |
 | `VALIDATE_AFTER` | No | `true` | Run validation on all tables after migration completes (set to `false` to skip) |
 
 ### With Validation
