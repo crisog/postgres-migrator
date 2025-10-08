@@ -48,8 +48,8 @@ All configuration is done via environment variables:
 | `SOURCE_DATABASE_URL` | Yes | - | Source database connection string |
 | `TARGET_DATABASE_URL` | Yes | - | Target database connection string |
 | `PARALLEL_JOBS` | No | `1` | Number of parallel jobs for restore (recommended: number of CPU cores) |
-| `NO_OWNER` | No | `true` | Skip ownership preservation (`false` to preserve owners) |
-| `NO_ACL` | No | `true` | Skip ACL/permissions (`false` to preserve permissions) |
+| `NO_OWNER` | No | `false` | Skip ownership preservation |
+| `NO_ACL` | No | `false` | Skip ACL/permissions |
 | `VALIDATE_AFTER` | No | `true` | Run validation on all tables after migration completes (set to `false` to skip) |
 
 ### With Validation
