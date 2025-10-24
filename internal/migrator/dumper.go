@@ -33,7 +33,7 @@ func (d *Dumper) Dump(ctx context.Context, outputFile string) error {
 
 	args := d.buildDumpArgs(outputFile)
 
-	d.logger.Printf("Executing: pg_dump %s\n", strings.Join(args, " "))
+	d.logger.Println("Executing pg_dump...")
 
 	cmd := exec.CommandContext(ctx, "pg_dump", args...)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", extractPassword(d.config.SourceDatabaseURL)))

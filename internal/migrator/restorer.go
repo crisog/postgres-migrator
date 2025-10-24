@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/crisog/postgres-migrator/internal/config"
 )
@@ -37,7 +36,7 @@ func (r *Restorer) restoreCustomFormat(ctx context.Context, inputFile string) er
 
 	args := r.buildRestoreArgs(inputFile)
 
-	r.logger.Printf("Executing: pg_restore %s\n", strings.Join(args, " "))
+	r.logger.Println("Executing pg_restore...")
 
 	cmd := exec.CommandContext(ctx, "pg_restore", args...)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("PGPASSWORD=%s", extractPassword(r.config.TargetDatabaseURL)))
