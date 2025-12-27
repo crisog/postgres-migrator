@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -13,6 +14,7 @@ type Config struct {
 	NoOwner           bool
 	NoACL             bool
 	ValidateAfter     bool
+	ExcludeSchemas    []string
 }
 
 func LoadFromEnv() (*Config, error) {
@@ -23,6 +25,7 @@ func LoadFromEnv() (*Config, error) {
 		NoOwner:           os.Getenv("NO_OWNER") != "false",
 		NoACL:             os.Getenv("NO_ACL") != "false",
 		ValidateAfter:     os.Getenv("VALIDATE_AFTER") != "false",
+		ExcludeSchemas:    parseCommaSeparatedList(os.Getenv("EXCLUDE_SCHEMAS")),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -60,4 +63,20 @@ func getEnvAsIntOrDefault(key string, defaultValue int) int {
 	}
 
 	return value
+}
+
+func parseCommaSeparatedList(value string) []string {
+	if value == "" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

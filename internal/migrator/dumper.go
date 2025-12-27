@@ -82,6 +82,10 @@ func (d *Dumper) buildDumpArgs(outputFile string) []string {
 		args = append(args, "--no-acl")
 	}
 
+	for _, schema := range d.config.ExcludeSchemas {
+		args = append(args, "--exclude-schema="+schema)
+	}
+
 	return args
 }
 
