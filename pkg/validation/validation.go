@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func quoteIdentifier(name string) string {
+	return `"` + name + `"`
+}
+
 type ColumnDefinition struct {
 	ColumnName    string
 	DataType      string
@@ -286,7 +290,7 @@ func validateSchemaConstraints(ctx context.Context, sourceConn, targetConn *pgx.
 }
 
 func validateRowCount(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) (int, error) {
-	query := "SELECT COUNT(*) FROM " + tableName
+	query := "SELECT COUNT(*) FROM " + quoteIdentifier(tableName)
 
 	var sourceCount int
 	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceCount); err != nil {
@@ -306,7 +310,7 @@ func validateRowCount(ctx context.Context, sourceConn, targetConn *pgx.Conn, tab
 }
 
 func validateIDRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	query := "SELECT MIN(id) AS min_id, MAX(id) AS max_id, COUNT(DISTINCT id) AS unique_ids FROM " + tableName
+	query := "SELECT MIN(id) AS min_id, MAX(id) AS max_id, COUNT(DISTINCT id) AS unique_ids FROM " + quoteIdentifier(tableName)
 
 	var sourceMinID, sourceMaxID, sourceUniqueIDs int
 	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceMinID, &sourceMaxID, &sourceUniqueIDs); err != nil {
@@ -326,11 +330,13 @@ func validateIDRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tabl
 }
 
 func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
+	quoted := quoteIdentifier(tableName)
+
 	var sourceAge, targetAge *int64
-	if err := sourceConn.QueryRow(ctx, "SELECT SUM(age) FROM "+tableName).Scan(&sourceAge); err != nil {
+	if err := sourceConn.QueryRow(ctx, "SELECT SUM(age) FROM "+quoted).Scan(&sourceAge); err != nil {
 		return fmt.Errorf("source age sum failed: %w", err)
 	}
-	if err := targetConn.QueryRow(ctx, "SELECT SUM(age) FROM "+tableName).Scan(&targetAge); err != nil {
+	if err := targetConn.QueryRow(ctx, "SELECT SUM(age) FROM "+quoted).Scan(&targetAge); err != nil {
 		return fmt.Errorf("target age sum failed: %w", err)
 	}
 	if (sourceAge == nil) != (targetAge == nil) || (sourceAge != nil && *sourceAge != *targetAge) {
@@ -338,10 +344,10 @@ func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Con
 	}
 
 	var sourceSalary, targetSalary *float64
-	if err := sourceConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+tableName).Scan(&sourceSalary); err != nil {
+	if err := sourceConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+quoted).Scan(&sourceSalary); err != nil {
 		return fmt.Errorf("source salary sum failed: %w", err)
 	}
-	if err := targetConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+tableName).Scan(&targetSalary); err != nil {
+	if err := targetConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+quoted).Scan(&targetSalary); err != nil {
 		return fmt.Errorf("target salary sum failed: %w", err)
 	}
 	if (sourceSalary == nil) != (targetSalary == nil) || (sourceSalary != nil && *sourceSalary != *targetSalary) {
@@ -349,10 +355,10 @@ func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Con
 	}
 
 	var sourceNames, targetNames int
-	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+tableName).Scan(&sourceNames); err != nil {
+	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+quoted).Scan(&sourceNames); err != nil {
 		return fmt.Errorf("source unique names failed: %w", err)
 	}
-	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+tableName).Scan(&targetNames); err != nil {
+	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+quoted).Scan(&targetNames); err != nil {
 		return fmt.Errorf("target unique names failed: %w", err)
 	}
 	if sourceNames != targetNames {
@@ -360,10 +366,10 @@ func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Con
 	}
 
 	var sourceEmails, targetEmails int
-	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+tableName).Scan(&sourceEmails); err != nil {
+	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+quoted).Scan(&sourceEmails); err != nil {
 		return fmt.Errorf("source unique emails failed: %w", err)
 	}
-	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+tableName).Scan(&targetEmails); err != nil {
+	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+quoted).Scan(&targetEmails); err != nil {
 		return fmt.Errorf("target unique emails failed: %w", err)
 	}
 	if sourceEmails != targetEmails {
@@ -374,7 +380,7 @@ func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Con
 }
 
 func validateTimestampRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	query := "SELECT MIN(created_at)::text AS earliest_created, MAX(created_at)::text AS latest_created FROM " + tableName
+	query := "SELECT MIN(created_at)::text AS earliest_created, MAX(created_at)::text AS latest_created FROM " + quoteIdentifier(tableName)
 
 	var sourceMin, sourceMax *string
 	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceMin, &sourceMax); err != nil {
@@ -399,7 +405,7 @@ func validateTimestampRange(ctx context.Context, sourceConn, targetConn *pgx.Con
 func validateDataChecksum(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
 	query := `SELECT MD5(STRING_AGG(name || '|' || email || '|' || COALESCE(age::text, '') || '|' ||
 		COALESCE(salary::text, '') || '|' || COALESCE(created_at::text, ''), '|' ORDER BY id))
-		AS data_checksum FROM ` + tableName
+		AS data_checksum FROM ` + quoteIdentifier(tableName)
 
 	var sourceChecksum string
 	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceChecksum); err != nil {
