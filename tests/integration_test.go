@@ -496,3 +496,60 @@ func TestLargeDataset(t *testing.T) {
 
 	helpers.ValidateIDsInRange(t, ctx, sourceConn, targetConn, "random_data", 1, 1000000)
 }
+
+func TestExcludeSchemas(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	sourceContainer, err := postgres.Run(
+		ctx,
+		getPostgresImage(getDefaultPostgresVersion()),
+		postgres.WithDatabase("sourcedb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		postgres.WithInitScripts("testdata/init-exclude-schema.sql"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, sourceContainer)
+	require.NoError(t, err)
+
+	targetContainer, err := postgres.Run(
+		ctx,
+		getPostgresImage(getDefaultPostgresVersion()),
+		postgres.WithDatabase("targetdb"),
+		postgres.WithUsername("user"),
+		postgres.WithPassword("password"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").WithOccurrence(2),
+			wait.ForListeningPort("5432/tcp"),
+		),
+	)
+	testcontainers.CleanupContainer(t, targetContainer)
+	require.NoError(t, err)
+
+	sourceConnStr, err := sourceContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	targetConnStr, err := targetContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	helpers.RunMigrationWithExcludeSchemas(t, ctx, sourceConnStr, targetConnStr, []string{"excluded_schema"})
+
+	targetConn, err := pgx.Connect(ctx, targetConnStr)
+	require.NoError(t, err)
+	defer targetConn.Close(ctx)
+
+	var userCount int
+	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&userCount)
+	require.NoError(t, err)
+	require.Equal(t, 2, userCount, "Public schema users table should be migrated")
+
+	var schemaExists bool
+	err = targetConn.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = 'excluded_schema')").Scan(&schemaExists)
+	require.NoError(t, err)
+	require.False(t, schemaExists, "excluded_schema should not exist in target")
+}

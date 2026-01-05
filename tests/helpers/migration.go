@@ -60,3 +60,20 @@ func RunMigrationExpectSkip(t *testing.T, ctx context.Context, sourceURL, target
 	require.NoError(t, err)
 	require.True(t, skipped, "Migration should have been skipped due to existing tables in target")
 }
+
+func RunMigrationWithExcludeSchemas(t *testing.T, ctx context.Context, sourceURL, targetURL string, excludeSchemas []string) {
+	t.Helper()
+
+	cfg := &config.Config{
+		SourceDatabaseURL: sourceURL,
+		TargetDatabaseURL: targetURL,
+		ParallelJobs:      1,
+		NoOwner:           true,
+		NoACL:             true,
+		ExcludeSchemas:    excludeSchemas,
+	}
+
+	logger := log.New(io.Discard, "", 0)
+	_, err := migration.Run(ctx, cfg, logger)
+	require.NoError(t, err)
+}
