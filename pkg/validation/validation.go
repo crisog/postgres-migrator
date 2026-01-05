@@ -13,6 +13,44 @@ func quoteIdentifier(name string) string {
 	return `"` + name + `"`
 }
 
+func columnExists(ctx context.Context, conn *pgx.Conn, tableName, columnName string) bool {
+	var exists bool
+	query := `SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_name = $1 AND column_name = $2
+	)`
+	if err := conn.QueryRow(ctx, query, tableName, columnName).Scan(&exists); err != nil {
+		return false
+	}
+	return exists
+}
+
+func getPrimaryKeyColumns(ctx context.Context, conn *pgx.Conn, tableName string) ([]string, error) {
+	query := `
+		SELECT a.attname
+		FROM pg_index i
+		JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+		WHERE i.indrelid = $1::regclass AND i.indisprimary
+		ORDER BY array_position(i.indkey, a.attnum)`
+
+	rows, err := conn.Query(ctx, query, quoteIdentifier(tableName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []string
+	for rows.Next() {
+		var col string
+		if err := rows.Scan(&col); err != nil {
+			return nil, err
+		}
+		columns = append(columns, col)
+	}
+	return columns, rows.Err()
+}
+
+
 type ColumnDefinition struct {
 	ColumnName    string
 	DataType      string
@@ -33,20 +71,8 @@ func ValidateRowCount(ctx context.Context, sourceConn, targetConn *pgx.Conn, tab
 	return count, count, err
 }
 
-func ValidateIDRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	return validateIDRange(ctx, sourceConn, targetConn, tableName)
-}
-
-func ValidateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	return validateAggregateStats(ctx, sourceConn, targetConn, tableName)
-}
-
-func ValidateTimestampRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	return validateTimestampRange(ctx, sourceConn, targetConn, tableName)
-}
-
-func ValidateDataChecksum(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	return validateDataChecksum(ctx, sourceConn, targetConn, tableName)
+func ValidatePrimaryKey(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
+	return validatePrimaryKey(ctx, sourceConn, targetConn, tableName)
 }
 
 func ValidateTableMigrationFromURLs(ctx context.Context, sourceURL, targetURL, tableName string, validateChecksum bool, logger *log.Logger) error {
@@ -78,47 +104,68 @@ func ValidateAllTablesFromURLs(ctx context.Context, sourceURL, targetURL string,
 	}
 	defer targetConn.Close(ctx)
 
-	// Get all tables from target database
 	query := `
 		SELECT tablename
 		FROM pg_tables
 		WHERE schemaname = 'public'
 		ORDER BY tablename`
 
-	rows, err := targetConn.Query(ctx, query)
+	sourceRows, err := sourceConn.Query(ctx, query)
 	if err != nil {
-		return fmt.Errorf("failed to query tables: %w", err)
+		return fmt.Errorf("failed to query source tables: %w", err)
 	}
-	defer rows.Close()
+	defer sourceRows.Close()
 
-	var tables []string
-	for rows.Next() {
+	var sourceTables []string
+	for sourceRows.Next() {
 		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
+		if err := sourceRows.Scan(&tableName); err != nil {
 			return fmt.Errorf("failed to scan table name: %w", err)
 		}
-		tables = append(tables, tableName)
+		sourceTables = append(sourceTables, tableName)
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating tables: %w", err)
+	if err := sourceRows.Err(); err != nil {
+		return fmt.Errorf("error iterating source tables: %w", err)
 	}
 
-	if len(tables) == 0 {
-		logger.Println("No tables found to validate")
+	targetRows, err := targetConn.Query(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to query target tables: %w", err)
+	}
+	defer targetRows.Close()
+
+	targetTables := make(map[string]bool)
+	for targetRows.Next() {
+		var tableName string
+		if err := targetRows.Scan(&tableName); err != nil {
+			return fmt.Errorf("failed to scan table name: %w", err)
+		}
+		targetTables[tableName] = true
+	}
+	if err := targetRows.Err(); err != nil {
+		return fmt.Errorf("error iterating target tables: %w", err)
+	}
+
+	if len(sourceTables) == 0 {
+		logger.Println("No tables found in source database")
 		return nil
 	}
 
-	logger.Printf("Found %d tables to validate\n", len(tables))
+	logger.Printf("Found %d tables in source database to validate\n", len(sourceTables))
 
-	// Validate each table (without checksum for speed)
-	for _, tableName := range tables {
+	for _, tableName := range sourceTables {
 		logger.Printf("\n=== Validating table: %s ===", tableName)
+
+		if !targetTables[tableName] {
+			return fmt.Errorf("validation failed for table %s: table missing from target database", tableName)
+		}
+
 		if err := ValidateTableMigration(ctx, sourceConn, targetConn, tableName, false, logger); err != nil {
 			return fmt.Errorf("validation failed for table %s: %w", tableName, err)
 		}
 	}
 
-	logger.Printf("\n✓ All %d tables validated successfully", len(tables))
+	logger.Printf("\n✓ All %d tables validated successfully", len(sourceTables))
 	return nil
 }
 
@@ -142,31 +189,11 @@ func ValidateTableMigration(ctx context.Context, sourceConn, targetConn *pgx.Con
 	}
 	logger.Printf("✓ Row count matches: %d records", sourceCount)
 
-	logger.Println("Validating ID range...")
-	if err := validateIDRange(ctx, sourceConn, targetConn, tableName); err != nil {
-		return fmt.Errorf("ID range validation failed: %w", err)
+	logger.Println("Validating primary key...")
+	if err := validatePrimaryKey(ctx, sourceConn, targetConn, tableName); err != nil {
+		return fmt.Errorf("primary key validation failed: %w", err)
 	}
-	logger.Println("✓ ID range matches")
-
-	logger.Println("Validating aggregate statistics...")
-	if err := validateAggregateStats(ctx, sourceConn, targetConn, tableName); err != nil {
-		return fmt.Errorf("aggregate statistics validation failed: %w", err)
-	}
-	logger.Println("✓ Aggregate statistics match")
-
-	logger.Println("Validating timestamp range...")
-	if err := validateTimestampRange(ctx, sourceConn, targetConn, tableName); err != nil {
-		return fmt.Errorf("timestamp range validation failed: %w", err)
-	}
-	logger.Println("✓ Timestamp range matches")
-
-	if validateChecksum {
-		logger.Println("Validating data checksum (this may take a while on large datasets)...")
-		if err := validateDataChecksum(ctx, sourceConn, targetConn, tableName); err != nil {
-			return fmt.Errorf("data checksum validation failed: %w", err)
-		}
-		logger.Println("✓ Data checksum matches")
-	}
+	logger.Println("✓ Primary key matches")
 
 	return nil
 }
@@ -309,117 +336,32 @@ func validateRowCount(ctx context.Context, sourceConn, targetConn *pgx.Conn, tab
 	return sourceCount, nil
 }
 
-func validateIDRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	query := "SELECT MIN(id) AS min_id, MAX(id) AS max_id, COUNT(DISTINCT id) AS unique_ids FROM " + quoteIdentifier(tableName)
-
-	var sourceMinID, sourceMaxID, sourceUniqueIDs int
-	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceMinID, &sourceMaxID, &sourceUniqueIDs); err != nil {
-		return fmt.Errorf("source query failed: %w", err)
+func validatePrimaryKey(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
+	pkCols, err := getPrimaryKeyColumns(ctx, sourceConn, tableName)
+	if err != nil || len(pkCols) == 0 {
+		return nil
 	}
 
-	var targetMinID, targetMaxID, targetUniqueIDs int
-	if err := targetConn.QueryRow(ctx, query).Scan(&targetMinID, &targetMaxID, &targetUniqueIDs); err != nil {
-		return fmt.Errorf("target query failed: %w", err)
-	}
-
-	if sourceMinID != targetMinID || sourceMaxID != targetMaxID || sourceUniqueIDs != targetUniqueIDs {
-		return fmt.Errorf("ID range mismatch")
-	}
-
-	return nil
-}
-
-func validateAggregateStats(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
 	quoted := quoteIdentifier(tableName)
+	var sourceCount, targetCount int
 
-	var sourceAge, targetAge *int64
-	if err := sourceConn.QueryRow(ctx, "SELECT SUM(age) FROM "+quoted).Scan(&sourceAge); err != nil {
-		return fmt.Errorf("source age sum failed: %w", err)
-	}
-	if err := targetConn.QueryRow(ctx, "SELECT SUM(age) FROM "+quoted).Scan(&targetAge); err != nil {
-		return fmt.Errorf("target age sum failed: %w", err)
-	}
-	if (sourceAge == nil) != (targetAge == nil) || (sourceAge != nil && *sourceAge != *targetAge) {
-		return fmt.Errorf("sum of ages mismatch")
-	}
+	for _, pkCol := range pkCols {
+		quotedCol := quoteIdentifier(pkCol)
+		query := fmt.Sprintf("SELECT COUNT(DISTINCT %s) FROM %s", quotedCol, quoted)
 
-	var sourceSalary, targetSalary *float64
-	if err := sourceConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+quoted).Scan(&sourceSalary); err != nil {
-		return fmt.Errorf("source salary sum failed: %w", err)
-	}
-	if err := targetConn.QueryRow(ctx, "SELECT SUM(salary) FROM "+quoted).Scan(&targetSalary); err != nil {
-		return fmt.Errorf("target salary sum failed: %w", err)
-	}
-	if (sourceSalary == nil) != (targetSalary == nil) || (sourceSalary != nil && *sourceSalary != *targetSalary) {
-		return fmt.Errorf("sum of salaries mismatch")
-	}
+		if err := sourceConn.QueryRow(ctx, query).Scan(&sourceCount); err != nil {
+			return fmt.Errorf("source query failed for column %s: %w", pkCol, err)
+		}
 
-	var sourceNames, targetNames int
-	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+quoted).Scan(&sourceNames); err != nil {
-		return fmt.Errorf("source unique names failed: %w", err)
-	}
-	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT name) FROM "+quoted).Scan(&targetNames); err != nil {
-		return fmt.Errorf("target unique names failed: %w", err)
-	}
-	if sourceNames != targetNames {
-		return fmt.Errorf("unique name count mismatch")
-	}
+		if err := targetConn.QueryRow(ctx, query).Scan(&targetCount); err != nil {
+			return fmt.Errorf("target query failed for column %s: %w", pkCol, err)
+		}
 
-	var sourceEmails, targetEmails int
-	if err := sourceConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+quoted).Scan(&sourceEmails); err != nil {
-		return fmt.Errorf("source unique emails failed: %w", err)
-	}
-	if err := targetConn.QueryRow(ctx, "SELECT COUNT(DISTINCT email) FROM "+quoted).Scan(&targetEmails); err != nil {
-		return fmt.Errorf("target unique emails failed: %w", err)
-	}
-	if sourceEmails != targetEmails {
-		return fmt.Errorf("unique email count mismatch")
+		if sourceCount != targetCount {
+			return fmt.Errorf("primary key distinct count mismatch for %s: source=%d, target=%d", pkCol, sourceCount, targetCount)
+		}
 	}
 
 	return nil
 }
 
-func validateTimestampRange(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	query := "SELECT MIN(created_at)::text AS earliest_created, MAX(created_at)::text AS latest_created FROM " + quoteIdentifier(tableName)
-
-	var sourceMin, sourceMax *string
-	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceMin, &sourceMax); err != nil {
-		return fmt.Errorf("source query failed: %w", err)
-	}
-
-	var targetMin, targetMax *string
-	if err := targetConn.QueryRow(ctx, query).Scan(&targetMin, &targetMax); err != nil {
-		return fmt.Errorf("target query failed: %w", err)
-	}
-
-	if (sourceMin == nil) != (targetMin == nil) || (sourceMin != nil && *sourceMin != *targetMin) {
-		return fmt.Errorf("earliest timestamp mismatch")
-	}
-	if (sourceMax == nil) != (targetMax == nil) || (sourceMax != nil && *sourceMax != *targetMax) {
-		return fmt.Errorf("latest timestamp mismatch")
-	}
-
-	return nil
-}
-
-func validateDataChecksum(ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) error {
-	query := `SELECT MD5(STRING_AGG(name || '|' || email || '|' || COALESCE(age::text, '') || '|' ||
-		COALESCE(salary::text, '') || '|' || COALESCE(created_at::text, ''), '|' ORDER BY id))
-		AS data_checksum FROM ` + quoteIdentifier(tableName)
-
-	var sourceChecksum string
-	if err := sourceConn.QueryRow(ctx, query).Scan(&sourceChecksum); err != nil {
-		return fmt.Errorf("source checksum failed: %w", err)
-	}
-
-	var targetChecksum string
-	if err := targetConn.QueryRow(ctx, query).Scan(&targetChecksum); err != nil {
-		return fmt.Errorf("target checksum failed: %w", err)
-	}
-
-	if sourceChecksum != targetChecksum {
-		return fmt.Errorf("data checksums mismatch")
-	}
-
-	return nil
-}

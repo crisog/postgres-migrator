@@ -31,23 +31,20 @@ func ValidateConnection(ctx context.Context, databaseURL string) error {
 	return nil
 }
 
-func ValidateTargetIsClean(ctx context.Context, targetURL string) error {
+func GetTargetTableCount(ctx context.Context, targetURL string) (int, error) {
 	conn, err := pgx.Connect(ctx, targetURL)
 	if err != nil {
-		return fmt.Errorf("failed to connect to target database: %w", err)
+		return 0, fmt.Errorf("failed to connect to target database: %w", err)
 	}
 	defer conn.Close(ctx)
 
 	var tableCount int
 	err = conn.QueryRow(ctx, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'").Scan(&tableCount)
 	if err != nil {
-		return fmt.Errorf("failed to check for existing tables: %w", err)
-	}
-	if tableCount > 0 {
-		return fmt.Errorf("target database already exists with %d tables in public schema", tableCount)
+		return 0, fmt.Errorf("failed to check for existing tables: %w", err)
 	}
 
-	return nil
+	return tableCount, nil
 }
 
 func GetVersion(ctx context.Context, databaseURL string) (string, error) {
@@ -80,53 +77,54 @@ func extractMajorVersion(version string) (int, error) {
 	return major, nil
 }
 
-func ValidateBothConnections(logger *log.Logger, sourceURL, targetURL string) error {
+func ValidateBothConnections(logger *log.Logger, sourceURL, targetURL string) (targetTableCount int, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	logger.Println("Validating source database connection...")
 
 	if err := ValidateConnection(ctx, sourceURL); err != nil {
-		return fmt.Errorf("source database validation failed: %w", err)
+		return 0, fmt.Errorf("source database validation failed: %w", err)
 	}
 
 	sourceVersion, err := GetVersion(ctx, sourceURL)
 	if err != nil {
-		return fmt.Errorf("unable to get source database version: %w", err)
+		return 0, fmt.Errorf("unable to get source database version: %w", err)
 	}
 	logger.Printf("Source database: PostgreSQL %s\n", sourceVersion)
 
 	logger.Println("Validating target database connection...")
 
 	if err := ValidateConnection(ctx, targetURL); err != nil {
-		return fmt.Errorf("target database validation failed: %w", err)
+		return 0, fmt.Errorf("target database validation failed: %w", err)
 	}
 
 	targetVersion, err := GetVersion(ctx, targetURL)
 	if err != nil {
-		return fmt.Errorf("unable to get target database version: %w", err)
+		return 0, fmt.Errorf("unable to get target database version: %w", err)
 	}
 	logger.Printf("Target database: PostgreSQL %s\n", targetVersion)
 
 	sourceMajor, err := extractMajorVersion(sourceVersion)
 	if err != nil {
-		return fmt.Errorf("failed to parse source version: %w", err)
+		return 0, fmt.Errorf("failed to parse source version: %w", err)
 	}
 
 	targetMajor, err := extractMajorVersion(targetVersion)
 	if err != nil {
-		return fmt.Errorf("failed to parse target version: %w", err)
+		return 0, fmt.Errorf("failed to parse target version: %w", err)
 	}
 
 	if sourceMajor != targetMajor {
-		return fmt.Errorf("major version mismatch: source is PostgreSQL %d, target is PostgreSQL %d (must be same major version)", sourceMajor, targetMajor)
+		return 0, fmt.Errorf("major version mismatch: source is PostgreSQL %d, target is PostgreSQL %d (must be same major version)", sourceMajor, targetMajor)
 	}
 
 	logger.Printf("Version check passed: both databases are PostgreSQL %d\n", sourceMajor)
 
-	if err := ValidateTargetIsClean(ctx, targetURL); err != nil {
-		return err
+	targetTableCount, err = GetTargetTableCount(ctx, targetURL)
+	if err != nil {
+		return 0, err
 	}
 
-	return nil
+	return targetTableCount, nil
 }

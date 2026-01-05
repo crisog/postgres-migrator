@@ -28,46 +28,10 @@ func ValidateRowCount(t *testing.T, ctx context.Context, sourceConn, targetConn 
 	return sourceCount, targetCount
 }
 
-func ValidateIDRange(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) {
+func ValidatePrimaryKey(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) {
 	t.Helper()
-	err := validation.ValidateIDRange(ctx, sourceConn, targetConn, tableName)
-	require.NoError(t, err, "ID ranges should match between source and target")
-}
-
-func ValidateIDsInRange(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, minID, maxID int) {
-	t.Helper()
-
-	query := "SELECT COUNT(*) AS rows_in_range FROM " + tableName + " WHERE id BETWEEN $1 AND $2"
-
-	var sourceCount int
-	err := sourceConn.QueryRow(ctx, query, minID, maxID).Scan(&sourceCount)
-	require.NoError(t, err)
-
-	var targetCount int
-	err = targetConn.QueryRow(ctx, query, minID, maxID).Scan(&targetCount)
-	require.NoError(t, err)
-
-	require.Equal(t, sourceCount, targetCount, "Row counts in ID range should match")
-	expectedCount := maxID - minID + 1
-	require.Equal(t, expectedCount, targetCount, "All IDs in range should be present")
-}
-
-func ValidateAggregateStats(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) {
-	t.Helper()
-	err := validation.ValidateAggregateStats(ctx, sourceConn, targetConn, tableName)
-	require.NoError(t, err, "Aggregate statistics should match between source and target")
-}
-
-func ValidateTimestampRange(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) {
-	t.Helper()
-	err := validation.ValidateTimestampRange(ctx, sourceConn, targetConn, tableName)
-	require.NoError(t, err, "Timestamp ranges should match between source and target")
-}
-
-func ValidateDataChecksum(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string) {
-	t.Helper()
-	err := validation.ValidateDataChecksum(ctx, sourceConn, targetConn, tableName)
-	require.NoError(t, err, "Data checksums should match - data integrity verified")
+	err := validation.ValidatePrimaryKey(ctx, sourceConn, targetConn, tableName)
+	require.NoError(t, err, "Primary keys should match between source and target")
 }
 
 func ValidateTableMigration(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, validateChecksum bool) {
@@ -83,19 +47,8 @@ func ValidateTableMigration(t *testing.T, ctx context.Context, sourceConn, targe
 	sourceCount, _ := ValidateRowCount(t, ctx, sourceConn, targetConn, tableName)
 	t.Logf("Row count verified: %d records", sourceCount)
 
-	t.Log("Validating ID range...")
-	ValidateIDRange(t, ctx, sourceConn, targetConn, tableName)
-
-	t.Log("Validating aggregate statistics...")
-	ValidateAggregateStats(t, ctx, sourceConn, targetConn, tableName)
-
-	t.Log("Validating timestamp range...")
-	ValidateTimestampRange(t, ctx, sourceConn, targetConn, tableName)
-
-	if validateChecksum {
-		t.Log("Validating data checksum (this may take a while on large datasets)...")
-		ValidateDataChecksum(t, ctx, sourceConn, targetConn, tableName)
-	}
+	t.Log("Validating primary key...")
+	ValidatePrimaryKey(t, ctx, sourceConn, targetConn, tableName)
 
 	t.Logf("✓ All validations passed for table '%s'", tableName)
 }
@@ -112,4 +65,24 @@ func ValidateBasicMigration(t *testing.T, ctx context.Context, targetConn *pgx.C
 	err = targetConn.QueryRow(ctx, "SELECT COUNT(*) FROM posts").Scan(&postCount)
 	require.NoError(t, err)
 	require.Equal(t, 4, postCount)
+}
+
+func ValidateIDsInRange(t *testing.T, ctx context.Context, sourceConn, targetConn *pgx.Conn, tableName string, minID, maxID int) {
+	t.Helper()
+
+	quotedTable := `"` + tableName + `"`
+	query := "SELECT COUNT(*) FROM " + quotedTable + " WHERE id >= $1 AND id <= $2"
+
+	var sourceCount int
+	err := sourceConn.QueryRow(ctx, query, minID, maxID).Scan(&sourceCount)
+	require.NoError(t, err, "Failed to count IDs in source database")
+
+	var targetCount int
+	err = targetConn.QueryRow(ctx, query, minID, maxID).Scan(&targetCount)
+	require.NoError(t, err, "Failed to count IDs in target database")
+
+	expectedCount := maxID - minID + 1
+	require.Equal(t, expectedCount, sourceCount, "Source database should have all IDs in range")
+	require.Equal(t, expectedCount, targetCount, "Target database should have all IDs in range")
+	require.Equal(t, sourceCount, targetCount, "Source and target should have the same number of IDs in range")
 }

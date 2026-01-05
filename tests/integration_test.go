@@ -227,7 +227,7 @@ func TestNonCleanTarget(t *testing.T) {
 	targetConnStr, err := targetContainer.ConnectionString(ctx, "sslmode=disable")
 	require.NoError(t, err)
 
-	helpers.RunMigrationExpectError(t, ctx, sourceConnStr, targetConnStr, 1, true, true, "already exists")
+	helpers.RunMigrationExpectSkip(t, ctx, sourceConnStr, targetConnStr, 1, true, true)
 }
 
 func TestNoOwner(t *testing.T) {

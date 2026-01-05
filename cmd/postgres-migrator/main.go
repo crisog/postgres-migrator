@@ -37,13 +37,18 @@ func run() int {
 	}()
 
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
-	if err := migration.Run(ctx, cfg, logger); err != nil {
+	skippedMigration, err := migration.Run(ctx, cfg, logger)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
 
-	if cfg.ValidateAfter {
-		logger.Println("\nRunning post-migration validation...")
+	if skippedMigration || cfg.ValidateAfter {
+		if skippedMigration {
+			logger.Println("\nRunning validation on existing target database...")
+		} else {
+			logger.Println("\nRunning post-migration validation...")
+		}
 		if err := validation.ValidateAllTablesFromURLs(ctx, cfg.SourceDatabaseURL, cfg.TargetDatabaseURL, logger); err != nil {
 			fmt.Fprintf(os.Stderr, "Validation failed: %v\n", err)
 			return 1
