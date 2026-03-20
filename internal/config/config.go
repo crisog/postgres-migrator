@@ -15,6 +15,8 @@ type Config struct {
 	NoACL             bool
 	ValidateAfter     bool
 	ExcludeSchemas    []string
+	SkipVersionCheck  bool
+	DataOnly          bool
 }
 
 func LoadFromEnv() (*Config, error) {
@@ -26,6 +28,8 @@ func LoadFromEnv() (*Config, error) {
 		NoACL:             os.Getenv("NO_ACL") != "false",
 		ValidateAfter:     os.Getenv("VALIDATE_AFTER") != "false",
 		ExcludeSchemas:    parseCommaSeparatedList(os.Getenv("EXCLUDE_SCHEMAS")),
+		SkipVersionCheck:  os.Getenv("SKIP_VERSION_CHECK") == "true",
+		DataOnly:          os.Getenv("DATA_ONLY") == "true",
 	}
 
 	if err := cfg.Validate(); err != nil {

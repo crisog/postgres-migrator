@@ -99,6 +99,10 @@ func (r *Restorer) buildRestoreArgs(inputFile string) []string {
 		args = append(args, "--no-acl")
 	}
 
+	if r.config.DataOnly {
+		args = append(args, "--data-only")
+	}
+
 	if r.config.ParallelJobs > 1 {
 		args = append(args, "-j", fmt.Sprintf("%d", r.config.ParallelJobs))
 	}

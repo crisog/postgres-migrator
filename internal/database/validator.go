@@ -77,7 +77,7 @@ func extractMajorVersion(version string) (int, error) {
 	return major, nil
 }
 
-func ValidateBothConnections(logger *log.Logger, sourceURL, targetURL string) (targetTableCount int, err error) {
+func ValidateBothConnections(logger *log.Logger, sourceURL, targetURL string, skipVersionCheck bool) (targetTableCount int, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -116,10 +116,14 @@ func ValidateBothConnections(logger *log.Logger, sourceURL, targetURL string) (t
 	}
 
 	if sourceMajor != targetMajor {
-		return 0, fmt.Errorf("major version mismatch: source is PostgreSQL %d, target is PostgreSQL %d (must be same major version)", sourceMajor, targetMajor)
+		if skipVersionCheck {
+			logger.Printf("WARNING: major version mismatch: source is PostgreSQL %d, target is PostgreSQL %d (proceeding because SKIP_VERSION_CHECK is enabled)\n", sourceMajor, targetMajor)
+		} else {
+			return 0, fmt.Errorf("major version mismatch: source is PostgreSQL %d, target is PostgreSQL %d (must be same major version)", sourceMajor, targetMajor)
+		}
+	} else {
+		logger.Printf("Version check passed: both databases are PostgreSQL %d\n", sourceMajor)
 	}
-
-	logger.Printf("Version check passed: both databases are PostgreSQL %d\n", sourceMajor)
 
 	targetTableCount, err = GetTargetTableCount(ctx, targetURL)
 	if err != nil {
