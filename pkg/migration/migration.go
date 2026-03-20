@@ -19,14 +19,18 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) (skipMigra
 		logger.Printf("Parallel jobs: %d\n", cfg.ParallelJobs)
 	}
 
-	targetTableCount, err := database.ValidateBothConnections(logger, cfg.SourceDatabaseURL, cfg.TargetDatabaseURL)
+	targetTableCount, err := database.ValidateBothConnections(logger, cfg.SourceDatabaseURL, cfg.TargetDatabaseURL, cfg.SkipVersionCheck)
 	if err != nil {
 		return false, fmt.Errorf("connection validation failed: %w", err)
 	}
 
 	if targetTableCount > 0 {
-		logger.Printf("Target database already has %d tables, skipping migration and running validation only...\n", targetTableCount)
-		return true, nil
+		if cfg.DataOnly {
+			logger.Printf("Target database already has %d tables, proceeding with data-only restore (DATA_ONLY is enabled)...\n", targetTableCount)
+		} else {
+			logger.Printf("Target database already has %d tables, skipping migration and running validation only...\n", targetTableCount)
+			return true, nil
+		}
 	}
 
 	tmpDir, err := os.MkdirTemp("", "postgres-migrator-*")
