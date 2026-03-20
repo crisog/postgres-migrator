@@ -100,7 +100,7 @@ func (r *Restorer) buildRestoreArgs(inputFile string) []string {
 	}
 
 	if r.config.DataOnly {
-		args = append(args, "--data-only")
+		args = append(args, "--data-only", "--disable-triggers")
 	}
 
 	if r.config.ParallelJobs > 1 {
