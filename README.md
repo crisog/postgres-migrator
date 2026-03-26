@@ -25,8 +25,8 @@ go build -o postgres-migrator ./cmd/postgres-migrator
 ## Prerequisites
 
 - PostgreSQL client tools (`pg_dump` and `pg_restore`) must be installed and in your `PATH`
-- Source and target databases must have the same PostgreSQL major version
-- Target database must be empty (no existing tables in `public` schema)
+- Source and target databases must have the same PostgreSQL major version (unless `SKIP_VERSION_CHECK=true`)
+- Target database must be empty (no existing tables in `public` schema), or use `DATA_ONLY=true` if schema already exists
 
 ## Usage
 
@@ -51,7 +51,9 @@ All configuration is done via environment variables:
 | `NO_OWNER`            | No       | `false` | When `true`, skips restoration of object ownership (e.g., who owns tables/schemas). This omits ALTER OWNER commands in the dump file |
 | `NO_ACL`              | No       | `false` | When `true`, skips restoration of access privileges (ACLs), such as GRANT/REVOKE commands for permissions on objects.                |
 | `VALIDATE_AFTER`      | No       | `true`  | Run validation on all tables after migration completes (set to `false` to skip)                                                      |
-| `EXCLUDE_SCHEMAS`     | No       | -       | Comma-separated list of schemas to exclude from dump (e.g., `pscale_extensions`)                                                     |
+| `EXCLUDE_SCHEMAS`     | No       | -       | Comma-separated list of schemas to exclude from dump (e.g., `pscale_extensions` when migrating from PlanetScale)                     |
+| `SKIP_VERSION_CHECK`  | No       | `false` | When `true`, skips the PostgreSQL major version compatibility check, allowing migration across different versions (e.g., PG 16 to PG 17) |
+| `DATA_ONLY`           | No       | `false` | When `true`, restores only data without schema. Use when the target database already has the schema in place                          |
 
 ### With Validation
 
@@ -130,7 +132,7 @@ The validator checks:
 The tool will fail and exit with an error if:
 
 - Source or target database is unreachable
-- Database versions don't match (different major versions)
+- Database versions don't match (different major versions, unless `SKIP_VERSION_CHECK=true`)
 - Target database is not empty
 - `pg_dump` or `pg_restore` commands fail
 - Required roles/users don't exist (when `NO_OWNER=false`)
